@@ -51,7 +51,7 @@ public class YourService extends KiboRpcService
         api.judgeSendStart();
 
 
-        final double[] P3_pos = QR_event(10.7600f, -5.6122f, 4.5826f, 0.0f, 0.0f, 1.0f, 0.0f, max_count, P1);
+        final double[] P3_pos = QR_event(11.21, -10.15, 4.79,0.183f,0.183f,-0.683f,0.683f, max_count, P1);
         moveTo(10.7000f, -6.0300f, 5.0000f, 0.0f, 0.0f, 0.0f, 0.0f);
         moveTo(10.4600f, -6.2800f, 5.2400f, 0.0f, 0.0f, 0.0f, 0.0f);
         moveTo(10.4600f, -6.7800f, 5.2400f, 0.0f, 0.0f, 0.0f, 0.0f);

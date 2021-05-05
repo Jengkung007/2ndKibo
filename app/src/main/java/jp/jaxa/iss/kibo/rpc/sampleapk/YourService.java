@@ -33,16 +33,19 @@ import org.json.JSONObject;
  */
 
 public class YourService extends KiboRpcService {
+    
+    int CHECKING_MAX = 5;
+    double[][] nav_intrinsics = api.getNavCamIntrinsics();
 
     @Override
     protected void runPlan1(){
-        // write here your plan 1
         api.startMission();
-        moveToWrapper(11.71,-9.53,5.35,0,0,-0.707,0.707);
-        double[] a_prime  = qrCodeReader();
-        double[] prime_avoid = calculatePattern(a_prime);
-        api.takeSnapshot();
-        moveToWrapper(10.275,-10.314,4.295,0,0,-0.707,0.707);
+        
+        scanQR(11.21, -9.8, 4.79,0.183f,0.183f,-0.683f,0.683f); //Move to QR
+        // qrCodeReader(); //Read QR and return
+        // calculatePattern(a_prime);
+        // moveWithKOZ();
+        // moveToWrapper(10.275,-10.314,4.295,0f,0f,-0.707f,0.707f);
         api.reportMissionCompletion();
 
 
@@ -54,75 +57,49 @@ public class YourService extends KiboRpcService {
     @Override
     protected void runPlan3(){}
 
-    // You can add your method
-    private void moveToWrapper(double pos_x, double pos_y, double pos_z,
-                               double qua_x, double qua_y, double qua_z,
-                               double qua_w){
-        final int LOOP_MAX = 3;
-        final Point point = new Point(pos_x, pos_y, pos_z);
-        final Quaternion quaternion = new Quaternion((float)qua_x, (float)qua_y,
-                                                     (float)qua_z, (float)qua_w);
-        Result result = api.moveTo(point, quaternion, true);
-        int loopCounter = 0;
-        while(!result.hasSucceeded() || loopCounter < LOOP_MAX){
-            result = api.moveTo(point, quaternion, true);
-            ++loopCounter;
+    private void move(double x, double y, double z,float xo, float yo, float zo,float wo) {
+        Log.d("Move[status]:"," Start");
+        Result result = api.moveTo(new Point(x,y,z),new Quaternion(xo,yo,zo,wo),true);
+        int count = 0;
+        while (!result.hasSucceeded() && count<CHECKING_MAX) {
+            result = api.moveTo(new Point(x,y,z),new Quaternion(xo,yo,zo,wo),true);
+            count++;
         }
+        Log.d("Move[status]:"," Done");
     }
-    String MODE = "sim"; // mode setting ("sim" or "iss")
-    int NAV_MAX_COL = 1280;
-    int NAV_MAX_ROW =  960;
-    int PointCloud_COL = 224;
-    int PointCloud_ROW = 171;
-    // carmera constant value
-    int max_count = 5, center_range = 6, P1 = 0, P2 = 1;
-    // limit value
-    float AR_diagonal = 0.07071067812f;
-    float ARtoTarget = 0.1414f, y_shift = 0.1328f;
 
-    public Mat undistord(Mat src){
-        Mat dst = new Mat(1280, 960, CvType.CV_8UC1);
+    private void flash(float per) {
+        Log.d("Flash[status]:"," Start");
+        Result result = api.flashlightControlFront(per);
+        int count = 0;
+        while (!result.hasSucceeded() && count<CHECKING_MAX) {
+            result = api.flashlightControlFront(per);
+            count++;
+        }
+        Log.d("Flash[status]:"," Done");
+    }
+
+    private Mat undistort(Mat src) {
         Mat cameraMatrix = new Mat(3, 3, CvType.CV_32FC1);
         Mat distCoeffs = new Mat(1, 5, CvType.CV_32FC1);
-        int row = 0, col = 0;
-        double cameraMatrix_sim[] = {
-                344.173397, 0.000000, 630.793795,
-                0.000000, 344.277922, 487.033834,
-                0.000000, 0.000000, 1.000000};
-        double distCoeffs_sim[] = {-0.152963, 0.017530, -0.001107, -0.000210, 0.000000};
-        double cameraMatrix_orbit[] = {
-                692.827528, 0.000000, 571.399891,
-                0.000000, 691.919547, 504.956891,
-                0.000000, 0.000000, 1.000000};
-        double distCoeffs_orbit[] = {-0.312191, 0.073843, -0.000918, 0.001890, 0.000000};
-        if(MODE == "sim") {
-            cameraMatrix.put(row, col, cameraMatrix_sim);
-            distCoeffs.put(row, col, distCoeffs_sim);
-            Log.d("Mode[camera]:"," sim");
-        }
-        else if(MODE == "iss") {
-            cameraMatrix.put(row, col, cameraMatrix_orbit);
-            distCoeffs.put(row, col, distCoeffs_orbit);
-            Log.d("Mode[camera]:"," iss");
-        }
-        cameraMatrix.put(row, col, cameraMatrix_orbit);
-        distCoeffs.put(row, col, distCoeffs_orbit);
-        Imgproc.undistort(src, dst, cameraMatrix, distCoeffs);
-        return dst;
+        Mat out = new Mat(1280,960,CvType.CV_8UC1);
+        cameraMatrix.put(0,0,nav_intrinsics[0]);
+        distCoeffs.put(0,0,nav_intrinsics[1]);
+        Imgproc.undistort(src,out,cameraMatrix,distCoeffs);
+        return out;
     }
 
-    private Rect cropImage(int percent_crop) {
-        double ratio = NAV_MAX_COL / NAV_MAX_ROW;
+    public Rect cropImage(int percent_crop) {
+        double ratio = 1280 / 960;
         double percent_row = percent_crop/2;
         double percent_col = percent_row * ratio;
-        int offset_row = (int) percent_row * NAV_MAX_ROW / 100;
-        int offset_col = (int) percent_col * NAV_MAX_COL / 100;
-        double rows = NAV_MAX_ROW - (offset_row * 2);
-        double cols = NAV_MAX_COL - (offset_col * 2);
+        int offset_row = (int) percent_row * 960 / 100;
+        int offset_col = (int) percent_col * 1280 / 100;
+        double rows = 960 - (offset_row * 2);
+        double cols = 1280 - (offset_col * 2);
         return new Rect(offset_col, offset_row, (int) cols, (int) rows);
     }
-
-    private Bitmap resizeImage(Mat src, int width, int height) {
+    public Bitmap resizeImage(Mat src, int width, int height) {
         Size size = new Size(width, height);
         Imgproc.resize(src, src, size);
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
@@ -130,53 +107,35 @@ public class YourService extends KiboRpcService {
         return bitmap;
     }
 
-    private void flash_front(float state) {
-        try {
-            api.flashlightControlFront(state);
-            Thread.sleep(500);
-        } catch (Exception e) {}
-    }
-
-    private double[] qrCodeReader() {
-        double qr_content[] = null;
+    private void scanQR(double x, double y, double z,float xo, float yo, float zo,float wo) {
+        String raw_qr = null;
         int count = 0;
-        flash_front(0.8f);
-        while (qr_content == null && count < 5) {
-            Mat src_mat = new Mat(undistord(api.getMatNavCam()), cropImage(40));
-            Bitmap bMap = resizeImage(src_mat, 2000, 1500);
-            int[] intArray = new int[bMap.getWidth() * bMap.getHeight()];
-            bMap.getPixels(intArray, 0, bMap.getWidth(), 0, 0, bMap.getWidth(), bMap.getHeight());
-            LuminanceSource source = new RGBLuminanceSource(bMap.getWidth(), bMap.getHeight(), intArray);
+        Log.d("QR[status]:"," Start");
+        while (raw_qr==null && count<CHECKING_MAX) {
+            move(x,y,z,xo,yo,zo,wo);
+            Log.d("QR[status]:"," Scanning");
+            flash(0.25f);
+            Bitmap img = resizeImage(undistort(api.getMatNavCam()),2000,1500);
+            int[] intArray = new int[img.getWidth() * img.getHeight()];
+            img.getPixels(intArray, 0, img.getWidth(), 0, 0, img.getWidth(), img.getHeight());
+            LuminanceSource source = new RGBLuminanceSource(img.getWidth(), img.getHeight(), intArray);
             BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
             try {
                 com.google.zxing.Result result = new QRCodeReader().decode(bitmap);
-                JSONObject res = new JSONObject(result.getText());
-                qr_content = new double[] {res.getDouble("p"),res.getDouble("x"),res.getDouble("y"),res.getDouble("z")};
-                api.sendDiscoveredQR(result.getText());
+                raw_qr = result.getText();
+                Log.d("QR[status]:", " Detected :"+raw_qr);
             }
             catch (Exception e)
             {
-                Log.d("QR[status]:", " Can't parse JSON");
+                Log.d("QR[status]:", " Not detected");
             }
             count++;
         }
-        Log.d("QR[status]:", " Passed");
-        flash_front(0f);
-        return qr_content;
+        flash(0f);
+        api.sendDiscoveredQR(raw_qr);
+        Log.d("QR[status]:"," Done");
     }
 
-    private double [] calculatePattern(double[] a_prime) {
-        int pattern = (int)a_prime[0];
-        double x_prime = a_prime[1];
-        double y_prime = a_prime[2];
-        double z_prime = a_prime[3];
-        double[][][] obstacles = {{{0.075,0.3},{-0.3,-0.075},{-0.075,0},{0,0.075}},{{-0.3,-0.075},{-0.075,0},{0,0.075},{0.075,0.3}}};
-        double[] x_avoid = {x_prime+obstacles[0][(int)pattern%4][0],x_prime+obstacles[0][(int)pattern%4][1]};
-        double[] z_avoid = {z_prime+obstacles[0][(int)pattern/4][0],z_prime+obstacles[0][(int)pattern/4][1]};
-        double[] y_avoid = {y_prime,y_prime+1.785};
-        
-        return new double[] {};
-    }
 
 }
 
