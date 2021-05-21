@@ -48,7 +48,7 @@ public class YourService extends KiboRpcService
     @Override
     protected void runPlan1()
     {
-        api.judgeSendStart();
+        api.startMission(true);
 
 
         final double[] P3_pos = QR_event(11.21, -10.15, 4.79,0.183f,0.183f,-0.683f,0.683f, max_count, P1);
@@ -81,7 +81,7 @@ public class YourService extends KiboRpcService
     {
 
     }
-    public void moveTo(float px, float py, float pz, float qx, float qy, float qz, float qw)
+    public void moveTo(double px, double py, double pz, float qx, float qy, float qz, float qw)
     {
         Result result;
         int count = 0, max_count = 3;
@@ -139,40 +139,10 @@ public class YourService extends KiboRpcService
         Mat dst = new Mat(1280, 960, CvType.CV_8UC1);
         Mat cameraMatrix = new Mat(3, 3, CvType.CV_32FC1);
         Mat distCoeffs = new Mat(1, 5, CvType.CV_32FC1);
+        double[][] nav_intrinsics = api.getNavCamIntrinsics();
 
-        int row = 0, col = 0;
-
-        double cameraMatrix_sim[] =
-        {
-                344.173397, 0.000000, 630.793795,
-                0.000000, 344.277922, 487.033834,
-                0.000000, 0.000000, 1.000000
-        };
-        double distCoeffs_sim[] = {-0.152963, 0.017530, -0.001107, -0.000210, 0.000000};
-
-        double cameraMatrix_orbit[] =
-        {
-                692.827528, 0.000000, 571.399891,
-                0.000000, 691.919547, 504.956891,
-                0.000000, 0.000000, 1.000000
-        };
-        double distCoeffs_orbit[] = {-0.312191, 0.073843, -0.000918, 0.001890, 0.000000};
-
-        if(MODE == "sim")
-        {
-            cameraMatrix.put(row, col, cameraMatrix_sim);
-            distCoeffs.put(row, col, distCoeffs_sim);
-            Log.d("Mode[camera]:"," sim");
-        }
-        else if(MODE == "iss")
-        {
-            cameraMatrix.put(row, col, cameraMatrix_orbit);
-            distCoeffs.put(row, col, distCoeffs_orbit);
-            Log.d("Mode[camera]:"," iss");
-        }
-
-        cameraMatrix.put(row, col, cameraMatrix_orbit);
-        distCoeffs.put(row, col, distCoeffs_orbit);
+        cameraMatrix.put(0,0,nav_intrinsics[0]);
+        distCoeffs.put(0,0,nav_intrinsics[1]);
 
         Imgproc.undistort(src, dst, cameraMatrix, distCoeffs);
         return dst;
@@ -278,15 +248,15 @@ public class YourService extends KiboRpcService
         if(MODE == "sim")
         {
             Log.d("Mode[judge]:"," sim");
-            api.judgeSendFinishSimulation();
+            api.reportMissionCompletion();
         }
         else if(MODE == "iss")
         {
             Log.d("Mode[judge]:"," iss");
-            api.judgeSendFinishISS();
+            api.reportMissionCompletion();
         }
     }
-    public double[] QR_event(float px, float py, float pz, float qx, float qy, float qz, float qw, int count_max, int no)
+    public double[] QR_event(double px, double py, double pz, float qx, float qy, float qz, float qw, int count_max, int no)
     {
         String contents = null;
         int count = 0;
@@ -342,7 +312,7 @@ public class YourService extends KiboRpcService
 
 
         flash_control(false);
-        api.judgeSendDiscoveredQR(no, contents);
+        api.sendDiscoveredQR(contents);
         return new double[] {final_x, final_y, final_z, final_w};
     }
     public double[] AR_event(float px, float py, float pz, float qx, float qy, float qz, float qw, int count_max, boolean sent_AR)
@@ -361,7 +331,7 @@ public class YourService extends KiboRpcService
 
             //////////////////////////////////////////////////////////////////////////////////////////////////////
             Mat source = undistord(api.getMatNavCam());
-            Kinematics robot = api.getTrustedRobotKinematics(5);
+            Kinematics robot = api.getTrustedRobotKinematics();
             Mat ids = new Mat();
             Dictionary dictionary = Aruco.getPredefinedDictionary(Aruco.DICT_5X5_250);
             List<Mat> corners = new ArrayList<>();
@@ -370,8 +340,6 @@ public class YourService extends KiboRpcService
             {
                 Aruco.detectMarkers(source, dictionary, corners, ids);
                 contents = (int) ids.get(0, 0)[0];
-
-                if(sent_AR) api.judgeSendDiscoveredAR(Integer.toString(contents));
                 Log.d("AR[status]:", " Detected");
 
 
